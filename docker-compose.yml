@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  mavlink-sender:
+    build:
+      context: .
+      dockerfile: sender/Dockerfile
+    container_name: mavlink-sender
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      - GROUND_ADDR=${GROUND_ADDR:-192.168.1.100:14550}
+      - RUST_LOG=${RUST_LOG:-info}
+    command: ["--listen", "0.0.0.0:14551", "--forward", "${GROUND_ADDR:-192.168.1.100:14550}"]

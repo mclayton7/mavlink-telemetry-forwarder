@@ -1,0 +1,19 @@
+# Example mavlink-router configuration
+# Place this in /etc/mavlink-router/main.conf
+
+[General]
+TcpServerPort=5760
+ReportStats=false
+MavlinkDialect=auto
+
+# Main serial connection to flight controller
+[UartEndpoint alpha]
+Device=/dev/ttyAMA0
+Baud=921600
+
+# Sniffer endpoint for telemetry sender
+# This forwards all traffic to the sender application
+[UdpEndpoint sniffer]
+Mode=Normal
+Address=127.0.0.1
+Port=14551
