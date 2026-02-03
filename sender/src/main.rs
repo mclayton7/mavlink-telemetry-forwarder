@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 use clap::Parser;
+use common::MAX_MAVLINK_PACKET_SIZE;
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio::net::UdpSocket;
 use tracing::{error, info, warn};
 
-const MAX_MAVLINK_PACKET_SIZE: usize = 280;
 const RETRY_BACKOFF_MS: u64 = 1000;
 
 #[derive(Parser, Debug)]
@@ -43,24 +43,42 @@ async fn main() -> Result<()> {
 
     info!("Successfully bound to {}", args.listen);
 
-    // Main forwarding loop - never exit
+    // Set up graceful shutdown
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .context("Failed to setup SIGTERM handler")?;
+    let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
+        .context("Failed to setup SIGINT handler")?;
+
+    // Main forwarding loop
     let mut buffer = [0u8; MAX_MAVLINK_PACKET_SIZE];
     loop {
-        match socket.recv_from(&mut buffer).await {
-            Ok((len, _src)) => {
-                let packet = &buffer[..len];
+        tokio::select! {
+            result = socket.recv_from(&mut buffer) => {
+                match result {
+                    Ok((len, _src)) => {
+                        let packet = &buffer[..len];
 
-                // Forward packet to ground station (fire and forget)
-                if let Err(e) = socket.send_to(packet, args.forward).await {
-                    warn!("Failed to forward packet to {}: {}", args.forward, e);
-                    // Continue despite forward errors (UDP is best-effort)
+                        if let Err(e) = socket.send_to(packet, args.forward).await {
+                            warn!("Failed to forward packet to {}: {}", args.forward, e);
+                        }
+                    }
+                    Err(e) => {
+                        error!("Failed to receive packet: {}", e);
+                        tokio::time::sleep(Duration::from_millis(RETRY_BACKOFF_MS)).await;
+                    }
                 }
             }
-            Err(e) => {
-                error!("Failed to receive packet: {}", e);
-                // Backoff before retrying to avoid CPU spinning
-                tokio::time::sleep(Duration::from_millis(RETRY_BACKOFF_MS)).await;
+            _ = sigterm.recv() => {
+                info!("Received SIGTERM, shutting down");
+                break;
+            }
+            _ = sigint.recv() => {
+                info!("Received SIGINT, shutting down");
+                break;
             }
         }
     }
+
+    info!("Shutdown complete");
+    Ok(())
 }

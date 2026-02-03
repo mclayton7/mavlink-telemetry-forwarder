@@ -8,6 +8,7 @@ name = "mavlink-sender"
 path = "src/main.rs"
 
 [dependencies]
+common = { path = "../common" }
 tokio = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }

@@ -9,18 +9,23 @@ RUN apk add --no-cache musl-dev
 # Create app directory
 WORKDIR /app
 
-# Copy workspace files
-COPY Cargo.toml .
+# Copy all workspace manifests for dependency resolution
+COPY Cargo.toml Cargo.lock ./
 COPY sender/Cargo.toml sender/
+COPY receiver/Cargo.toml receiver/
+COPY common/Cargo.toml common/
 
-# Create dummy source to cache dependencies
-RUN mkdir sender/src && \
+# Create dummy sources for all workspace members to cache dependencies
+RUN mkdir -p sender/src receiver/src common/src && \
     echo "fn main() {}" > sender/src/main.rs && \
+    echo "fn main() {}" > receiver/src/main.rs && \
+    echo "" > common/src/lib.rs && \
     cargo build --release --bin mavlink-sender && \
-    rm -rf sender/src
+    rm -rf sender/src receiver/src common/src
 
-# Copy actual source code
+# Copy actual source code for sender and its dependency (common)
 COPY sender/src sender/src
+COPY common/src common/src
 
 # Build for release with optimizations
 RUN cargo build --release --bin mavlink-sender && \

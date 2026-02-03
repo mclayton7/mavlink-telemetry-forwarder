@@ -2,7 +2,10 @@ use chrono::Utc;
 
 /// Get current Unix epoch timestamp in microseconds
 pub fn get_timestamp_us() -> u64 {
-    Utc::now().timestamp_micros() as u64
+    Utc::now()
+        .timestamp_micros()
+        .try_into()
+        .expect("timestamp should be positive")
 }
 
 /// Format a MAVLink packet into tlog format: 8-byte timestamp (LE u64) + packet data

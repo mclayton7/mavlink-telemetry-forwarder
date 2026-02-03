@@ -4,9 +4,7 @@ resolver = "2"
 
 [workspace.dependencies]
 tokio = { version = "1.41", features = ["full"] }
-mavlink = { version = "0.13", features = ["tokio-1", "common", "ardupilotmega"] }
 anyhow = "1.0"
-thiserror = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 clap = { version = "4.5", features = ["derive", "env"] }

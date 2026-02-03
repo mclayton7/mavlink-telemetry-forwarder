@@ -1,16 +1,17 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use common::{mavlink_utils, tlog};
+use common::{mavlink_utils, tlog, MAX_MAVLINK_PACKET_SIZE};
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use tokio::fs::{self, File, OpenOptions};
+use std::time::Duration;
+use tokio::fs::{self, File};
 use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::net::UdpSocket;
 use tracing::{error, info, warn};
 
-const MAX_MAVLINK_PACKET_SIZE: usize = 280;
 const DEFAULT_MAX_FILE_SIZE_MB: u64 = 100;
 const FLUSH_INTERVAL_PACKETS: usize = 100;
+const RETRY_BACKOFF_MS: u64 = 1000;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "MAVLink telemetry receiver and tlog writer")]
@@ -30,7 +31,6 @@ struct Args {
 
 struct TlogWriter {
     current_file: BufWriter<File>,
-    current_path: PathBuf,
     bytes_written: u64,
     max_file_size: u64,
     output_dir: PathBuf,
@@ -45,11 +45,10 @@ impl TlogWriter {
             .context("Failed to create output directory")?;
 
         let max_file_size = max_file_size_mb * 1024 * 1024;
-        let (file, path) = Self::create_new_file(&output_dir).await?;
+        let file = Self::create_new_file(&output_dir).await?;
 
         Ok(Self {
             current_file: BufWriter::new(file),
-            current_path: path,
             bytes_written: 0,
             max_file_size,
             output_dir,
@@ -57,20 +56,21 @@ impl TlogWriter {
         })
     }
 
-    async fn create_new_file(output_dir: &Path) -> Result<(File, PathBuf)> {
-        let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
-        let filename = format!("telemetry_{}.tlog", timestamp);
+    async fn create_new_file(output_dir: &Path) -> Result<File> {
+        let now = chrono::Local::now();
+        let filename = format!(
+            "telemetry_{}_{:03}.tlog",
+            now.format("%Y%m%d_%H%M%S"),
+            now.timestamp_subsec_millis()
+        );
         let path = output_dir.join(&filename);
 
-        let file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
+        let file = File::create(&path)
             .await
             .context("Failed to create tlog file")?;
 
         info!("Created new tlog file: {}", path.display());
-        Ok((file, path))
+        Ok(file)
     }
 
     async fn write_packet(&mut self, packet: &[u8]) -> Result<()> {
@@ -121,9 +121,8 @@ impl TlogWriter {
             .context("Failed to flush before rotation")?;
 
         // Create new file
-        let (file, path) = Self::create_new_file(&self.output_dir).await?;
+        let file = Self::create_new_file(&self.output_dir).await?;
         self.current_file = BufWriter::new(file);
-        self.current_path = path;
         self.bytes_written = 0;
         self.packets_since_flush = 0;
 
@@ -186,7 +185,7 @@ async fn main() -> Result<()> {
 
                         // Validate MAVLink packet
                         if !mavlink_utils::is_valid_mavlink(packet) {
-                            warn!("Received invalid MAVLink packet (magic byte check failed)");
+                            warn!("Received invalid MAVLink packet (validation failed)");
                             continue;
                         }
 
@@ -197,6 +196,7 @@ async fn main() -> Result<()> {
                     }
                     Err(e) => {
                         error!("Failed to receive packet: {}", e);
+                        tokio::time::sleep(Duration::from_millis(RETRY_BACKOFF_MS)).await;
                     }
                 }
             }

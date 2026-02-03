@@ -39,7 +39,7 @@ mavlink-telemetry-sender/
   - `format_tlog_entry()`: Format packet with 8-byte LE timestamp
 - [x] `mavlink_utils.rs`: MAVLink packet validation
   - `is_valid_mavlink()`: Check magic byte (0xFD/0xFE)
-- [x] Unit tests: 6 tests passing
+- [x] Unit tests: 8 tests passing
 
 ### ✅ Sender Application
 - [x] UDP socket binding on configurable address (default 0.0.0.0:14551)
@@ -50,20 +50,21 @@ mavlink-telemetry-sender/
 - [x] Structured logging with tracing
 - [x] Error handling with automatic retry
 - [x] Never-crash design (log errors and continue)
+- [x] Graceful shutdown handling (SIGTERM/SIGINT)
 - [x] Dockerfile with multi-stage build
 - [x] Size-optimized release build (835 KB binary)
 
 ### ✅ Receiver Application
 - [x] UDP socket binding on configurable address (default 0.0.0.0:14550)
 - [x] Receive MAVLink packets
-- [x] Validate packets (magic byte check)
+- [x] Validate packets (magic byte + minimum length)
 - [x] Write to tlog format (8-byte timestamp + packet)
 - [x] Automatic file rotation based on size
 - [x] Buffered writes with periodic flush
 - [x] CLI argument parsing (--listen, --output, --max-file-size)
 - [x] Structured logging with tracing
 - [x] Graceful shutdown handling (SIGTERM/SIGINT)
-- [x] File naming: `telemetry_YYYYMMDD_HHMMSS.tlog`
+- [x] File naming: `telemetry_YYYYMMDD_HHMMSS_mmm.tlog`
 - [x] Size-optimized release build (917 KB binary)
 
 ### ✅ Docker Support
@@ -86,15 +87,17 @@ mavlink-telemetry-sender/
 ### Unit Tests
 ```bash
 $ cargo test
-running 6 tests
+running 8 tests
 test mavlink_utils::tests::test_empty_packet ... ok
-test mavlink_utils::tests::test_invalid_mavlink ... ok
+test mavlink_utils::tests::test_invalid_magic_byte ... ok
+test mavlink_utils::tests::test_v1_too_short ... ok
+test mavlink_utils::tests::test_v2_too_short ... ok
 test mavlink_utils::tests::test_valid_mavlink_v1 ... ok
 test mavlink_utils::tests::test_valid_mavlink_v2 ... ok
 test tlog::tests::test_timestamp_format ... ok
 test tlog::tests::test_tlog_entry_format ... ok
 
-test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured
 ```
 
 ### Build Verification
@@ -214,7 +217,7 @@ These are NOT implemented but could be added:
 ## Compatibility
 
 - **Rust**: 1.85 or later
-- **OS**: Linux, macOS, Windows
+- **OS**: Linux, macOS
 - **Docker**: Any version supporting multi-stage builds
 - **tlog format**: Compatible with:
   - Mission Planner
