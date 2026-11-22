@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 chrono = { workspace = true }
+mavlink-tlog = "0.1.4"

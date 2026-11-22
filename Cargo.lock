@@ -180,6 +180,7 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "mavlink-tlog",
 ]
 
 [[package]]
@@ -285,6 +286,12 @@ checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
  "regex-automata",
 ]
+
+[[package]]
+name = "mavlink-tlog"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56dc10e28f28477a20b62fd7c248a36e34d3ea0a0aa9264d854372e18c0718a9"
 
 [[package]]
 name = "memchr"

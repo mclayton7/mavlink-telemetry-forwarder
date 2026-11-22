@@ -75,7 +75,7 @@ impl TlogWriter {
 
     async fn write_packet(&mut self, packet: &[u8]) -> Result<()> {
         // Format packet with timestamp
-        let entry = tlog::format_tlog_entry(packet);
+        let entry = tlog::format_tlog_entry(packet).context("Failed to format tlog entry")?;
 
         // Write to file
         self.current_file
