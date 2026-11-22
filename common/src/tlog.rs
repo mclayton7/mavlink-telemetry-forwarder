@@ -1,4 +1,5 @@
 use chrono::Utc;
+use mavlink_tlog::TlogWriter;
 
 /// Get current Unix epoch timestamp in microseconds
 pub fn get_timestamp_us() -> u64 {
@@ -8,13 +9,11 @@ pub fn get_timestamp_us() -> u64 {
         .expect("timestamp should be positive")
 }
 
-/// Format a MAVLink packet into tlog format: 8-byte timestamp (LE u64) + packet data
-pub fn format_tlog_entry(packet: &[u8]) -> Vec<u8> {
-    let timestamp = get_timestamp_us();
-    let mut entry = Vec::with_capacity(8 + packet.len());
-    entry.extend_from_slice(&timestamp.to_le_bytes());
-    entry.extend_from_slice(packet);
-    entry
+/// Format a MAVLink packet into tlog format: 8-byte timestamp (BE u64) + packet data
+pub fn format_tlog_entry(packet: &[u8]) -> std::io::Result<Vec<u8>> {
+    let mut writer = TlogWriter::new(Vec::with_capacity(8 + packet.len()));
+    writer.write_frame(get_timestamp_us(), packet)?;
+    Ok(writer.into_inner())
 }
 
 #[cfg(test)]
@@ -30,18 +29,26 @@ mod tests {
 
     #[test]
     fn test_tlog_entry_format() {
-        let packet = vec![0xFD, 0x09, 0x00, 0x00, 0x00];
-        let entry = format_tlog_entry(&packet);
+        // HEARTBEAT, MAVLink 2
+        let packet = vec![
+            0xFD, 0x09, 0x00, 0x00, 0x00, 0x01, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x02, 0x03, 0x51, 0x04, 0x03, 0xE7, 0x1E,
+        ];
+        let entry = format_tlog_entry(&packet).unwrap();
 
         // Should be 8 bytes timestamp + packet length
         assert_eq!(entry.len(), 8 + packet.len());
 
-        // First 8 bytes should be LE u64 timestamp
+        // First 8 bytes are a BE u64 timestamp, as pymavlink, Mission Planner and QGC read it
         let timestamp_bytes: [u8; 8] = entry[..8].try_into().unwrap();
-        let timestamp = u64::from_le_bytes(timestamp_bytes);
+        let timestamp = u64::from_be_bytes(timestamp_bytes);
         assert!(timestamp > 1577836800_000000); // Reasonable timestamp
+        assert!(timestamp < 4102444800_000000); // Before 2100, so not byte-swapped
 
         // Remaining bytes should match packet
         assert_eq!(&entry[8..], &packet[..]);
+
+        // Reads back as one record
+        assert_eq!(mavlink_tlog::TlogSlice::new(&entry).count(), 1);
     }
 }
